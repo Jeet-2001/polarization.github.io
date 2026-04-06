@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polarization Lab - Stokes & Jones</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DragControls.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+            startup: { typeset: false }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        :root { --bg: #0e1117; --panel: #262730; --text: #fafafa; --accent: #03dac6; --border: #444; }
+        body { font-family: "Source Sans Pro", sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 30px 5%; }
+        h1, h2, h3, h4 { font-weight: 600; margin-top: 0; }
+        h1 { font-size: 2.5rem; margin-bottom: 5px; }
+        p.subtitle { color: #aaa; font-size: 1.1rem; margin-bottom: 20px; }
+        hr { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
+        
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        .tab { padding: 10px 20px; cursor: pointer; color: #aaa; border-bottom: 2px solid transparent; transition: 0.3s; font-size: 1.1rem; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: #ff4b4b; border-bottom: 2px solid #ff4b4b; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .row { display: flex; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
+        .col-1 { flex: 1; min-width: 300px; }
+        .col-1-5 { flex: 1.5; min-width: 400px; }
+        .col-2 { flex: 2; min-width: 500px; }
+        
+        .control-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.95rem; }
+        .val-display { float: right; font-weight: normal; color: #ccc; }
+        input[type="range"] { width: 100%; accent-color: var(--accent); }
+        select { width: 100%; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 1rem; outline: none; }
+        button { background: var(--panel); border: 1px solid var(--border); color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: 0.2s; font-size: 1rem; }
+        button.primary { background: #ff4b4b; border-color: #ff4b4b; font-weight: bold; }
+        button:hover { filter: brightness(1.2); }
+
+        .info-box { background: rgba(3, 218, 198, 0.1); border-left: 4px solid #03dac6; padding: 15px; margin-bottom: 20px; border-radius: 4px; font-size: 0.95rem; }
+        
+        .canvas-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+        canvas { max-width: 100%; height: auto; }
+        
+        .plotly-div { width: 100%; height: 350px; background: #121212; border-radius: 8px; border: 1px solid var(--border); overflow: hidden;}
+        .plotly-intensity { width: 100%; height: 250px; background: #121212; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 20px; overflow: hidden;}
+        .graph-container { display: flex; justify-content: center; align-items: stretch; gap: 20px; flex-wrap: wrap; width: 100%; }
+        .graph-card { flex: 1; min-width: 320px; max-width: 450px; display: flex; flex-direction: column; align-items: center; }
+
+        #bench3d { width: 100%; height: 500px; background: #121212; border-radius: 8px; border: 1px solid var(--border); position: relative; }
+        #poincare-container { width: 100%; height: 600px; background: #121212; border-radius: 8px; border: 1px solid var(--border); }
+        .badge { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 6px 10px; border-radius: 4px; font-size: 0.8rem; z-index: 10; pointer-events: none;}
+        
+        .math-box { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 150px; text-align: center; overflow-x: auto; padding: 15px;}
+        .math-box::-webkit-scrollbar { height: 6px; }
+        .math-box::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+        
+        .stokes-vector-display { font-family: monospace; font-size: 1.8rem; color: #ff4b4b; background: #121212; padding: 15px; border-radius: 8px; border: 1px solid var(--border); text-align: center; margin-bottom: 20px; letter-spacing: 2px;}
+    </style>
+</head>
+<body>
+
+    <h1>Polarization Optics Visual Lab</h1>
+    <p class="subtitle">Dynamic Chain Architecture & Stokes Polarimetry</p>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab(1)">1. Optical Bench (Jones Calculus)</div>
+        <div class="tab" onclick="switchTab(2)">2. Stokes Polarimetry Setup</div>
+    </div>
+
+    <div id="tab1" class="tab-content active">
+        <h4 style="color:#03dac6;">Flow: Unpolarized Source → Optic 1 → Optic 2 → ... → Detector</h4>
+        <hr>
+        
+        <div class="row">
+            <div class="col-1">
+                <h3>Optical Pipeline Controls</h3>
+                <div class="info-box">
+                    💡 <strong>Tip:</strong> Drag components horizontally in the 3D view to physically move them. 
+                </div>
+
+                <div id="component-list-container"></div>
+                
+                <hr>
+                <div style="display:flex; gap: 10px; flex-wrap:wrap;">
+                    <select id="new-comp-type" style="flex: 2; min-width: 150px;">
+                        <option value="Linear">Linear Polarizer</option>
+                        <option value="RCP">Right Circular (RCP)</option>
+                        <option value="LCP">Left Circular (LCP)</option>
+                        <option value="Elliptical">Elliptical Polarizer</option>
+                        <option value="QWP">Quarter-Wave Plate (QWP)</option>
+                        <option value="HWP">Half-Wave Plate (HWP)</option>
+                        <option value="PBS">Polarizing Beam Splitter</option>
+                    </select>
+                    <button class="primary" style="flex: 1;" onclick="addNewComponent()">+ Add Optic</button>
+                </div>
+            </div>
+
+            <div class="col-1-5">
+                <div class="canvas-card" style="margin-bottom: 20px;">
+                    <strong style="margin-bottom: 10px;">2D Optical Setup Overview</strong>
+                    <canvas id="bench2d" width="900" height="260"></canvas>
+                </div>
+
+                <div id="unpol-warning" class="warning-box" style="display:none; background: rgba(244, 67, 54, 0.1); border-left: 4px solid #f44336; padding: 10px 15px; margin-bottom: 20px; border-radius: 4px;">
+                    Output is Unpolarized. Add a Linear, Circular, Elliptical Polarizer, or a PBS to polarize the chaotic light!
+                </div>
+
+                <div id="math-panel" class="row">
+                    <div class="col-1 math-box" id="math-box-1" style="background: var(--panel); border: 1px solid var(--border); border-radius: 8px;"></div>
+                    <div class="col-1 canvas-card" id="ellipse-box-1">
+                        <strong>Transmitted Output</strong>
+                        <canvas id="ellipse1" width="200" height="200"></canvas>
+                    </div>
+                    <div class="col-1 canvas-card" id="ellipse-box-2" style="display:none;">
+                        <strong>Reflected Path</strong>
+                        <canvas id="ellipse2" width="200" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h3>3D Interactive Optical Bench (Drag & Drop)</h3>
+        <div id="bench3d">
+            <div class="badge">🖱️ Orbit: Background | 🖐️ Drag: Components | 🔍 Zoom: Scroll</div>
+        </div>
+
+        <div id="3d-graphs-container">
+            <hr>
+            <h3>Intensity Profile & Wave Analysis</h3>
+            
+            <div id="plot-intensity" class="plotly-intensity"></div>
+
+            <div class="graph-container">
+                <div class="graph-card" id="plot-col-in">
+                    <strong style="margin-bottom: 10px;" id="title-in">Wave Before Attachments ($\mathbf{E}_{in}$)</strong>
+                    <div id="plot-in" class="plotly-div"></div>
+                </div>
+                <div class="graph-card" id="plot-col-out">
+                    <strong style="margin-bottom: 10px;" id="title-out">Wave After Attachments ($\mathbf{E}_{out}$)</strong>
+                    <div id="plot-out" class="plotly-div"></div>
+                </div>
+                <div class="graph-card" id="plot-col-refl" style="display:none;">
+                    <strong style="margin-bottom: 10px;" id="title-refl">Primary Reflected Wave (PBS)</strong>
+                    <div id="plot-refl" class="plotly-div"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab2" class="tab-content">
+        <h3>Stokes Polarimeter Output & Analysis</h3>
+        <p style="color: #aaa; margin-bottom: 20px;">A standard polarimeter determines the Degree of Polarization (DOP) and Stokes vector by passing light through a continuously rotating Quarter-Wave Plate (QWP) and a fixed Linear Polarizer before measuring intensity at the detector.</p>
+        
+        <div id="polarimeter3d" style="width: 100%; height: 350px; background: #121212; border-radius: 8px; border: 1px solid var(--border); position: relative; margin-bottom: 30px;">
+            <div class="badge">📸 3D Polarimeter Setup (Unknown Source → Rotating QWP → Fixed Linear → Detector)</div>
+        </div>
+
+        <div class="row">
+            <div class="col-1">
+                <button class="primary" onclick="generateStokesChallenge()" style="width: 100%; margin-bottom: 15px;">Generate Random Light Signal</button>
+                
+                <p style="color: #ccc; font-size: 0.95rem; margin-bottom: 5px;"><strong>Measured Stokes Vector $[S_0, S_1, S_2, S_3]$:</strong></p>
+                <div class="stokes-vector-display" id="stokes-display">
+                    [ 1.00,  0.00,  0.00,  0.00 ]
+                </div>
+                
+                <div id="stokes-result-box" class="info-box" style="margin-top: 20px; font-size: 1.05rem; line-height: 1.6; overflow-x: auto;">
+                    </div>
+
+                <div id="polarimeter-intensity" class="plotly-intensity" style="margin-top: 20px; height: 200px;"></div>
+            </div>
+            
+            <div class="col-2">
+                <div class="canvas-card" style="padding: 0;">
+                    <div id="poincare-container"></div>
+                </div>
+                <p style="text-align: center; color: #888; font-size: 0.9rem; margin-top: 10px;">
+                    <strong>The Poincaré Sphere:</strong> The measured Stokes vector mapped onto the sphere.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => {
+            if(window.MathJax && window.MathJax.typesetPromise) MathJax.typesetPromise();
+        });
+
+        // --- 1. COMPLEX MATH & JONES CALCULUS ---
+        class C {
+            constructor(r, i=0) { this.r = r; this.i = i; }
+            static add(a, b) { return new C(a.r + b.r, a.i + b.i); }
+            static mul(a, b) { return new C(a.r*b.r - a.i*b.i, a.r*b.i + a.i*b.r); }
+            static scale(a, s) { return new C(a.r * s, a.i * s); }
+            static exp(theta) { return new C(Math.cos(theta), Math.sin(theta)); }
+            mag2() { return this.r*this.r + this.i*this.i; }
+        }
+
+        function dotM(M, V) {
+            return [
+                C.add(C.mul(M[0][0], V[0]), C.mul(M[0][1], V[1])),
+                C.add(C.mul(M[1][0], V[0]), C.mul(M[1][1], V[1]))
+            ];
+        }
+
+        function multiplyMatrices(A, B) {
+            return [
+                [C.add(C.mul(A[0][0], B[0][0]), C.mul(A[0][1], B[1][0])), C.add(C.mul(A[0][0], B[0][1]), C.mul(A[0][1], B[1][1]))],
+                [C.add(C.mul(A[1][0], B[0][0]), C.mul(A[1][1], B[1][0])), C.add(C.mul(A[1][0], B[0][1]), C.mul(A[1][1], B[1][1]))]
+            ];
+        }
+
+        function fmtC(c) {
+            let r = c.r, i = c.i;
+            if (Math.abs(r) < 1e-3) r = 0;
+            if (Math.abs(i) < 1e-3) i = 0;
+            if (i === 0 && r === 0) return "0.00";
+            if (i === 0) return r.toFixed(2);
+            if (r === 0) return i.toFixed(2) + "i";
+            return `${r.toFixed(2)} ${i >= 0 ? '+' : '-'} ${Math.abs(i).toFixed(2)}i`;
+        }
+
+        function getOpticMatrix(type, deg) {
+            const rad = deg * Math.PI / 180;
+            if (type === "RCP") return [[new C(0.5), new C(0, -0.5)], [new C(0, 0.5), new C(0.5)]];
+            if (type === "LCP") return [[new C(0.5), new C(0, 0.5)], [new C(0, -0.5), new C(0.5)]];
+            if (type === "Elliptical") {
+                const ca = Math.cos(rad), sa = Math.sin(rad);
+                return [[new C(ca*ca), new C(ca*sa, -0.5*sa)], [new C(ca*sa, 0.5*sa), new C(sa*sa)]];
+            }
+            if (type === "PBS" || type === "Linear") {
+                const c = Math.cos(rad), s = Math.sin(rad);
+                return [[new C(c*c), new C(c*s)], [new C(c*s), new C(s*s)]];
+            }
+            let phase = 0; 
+            if (type === "QWP") phase = Math.PI / 2;
+            if (type === "HWP") phase = Math.PI;
+
+            const c = Math.cos(rad), s = Math.sin(rad);
+            const J = [[new C(1), new C(0)], [new C(0), C.exp(-phase)]];
+            
+            return [
+                [C.add(C.mul(new C(c), C.add(C.scale(J[0][0],c), C.scale(J[0][1],s))), C.mul(new C(-s), C.add(C.scale(J[1][0],c), C.scale(J[1][1],s)))),
+                 C.add(C.mul(new C(c), C.add(C.scale(J[0][0],-s), C.scale(J[0][1],c))), C.mul(new C(-s), C.add(C.scale(J[1][0],-s), C.scale(J[1][1],c))))],
+                [C.add(C.mul(new C(s), C.add(C.scale(J[0][0],c), C.scale(J[0][1],s))), C.mul(new C(c), C.add(C.scale(J[1][0],c), C.scale(J[1][1],s)))),
+                 C.add(C.mul(new C(s), C.add(C.scale(J[0][0],-s), C.scale(J[0][1],c))), C.mul(new C(c), C.add(C.scale(J[1][0],-s), C.scale(J[1][1],c))))]
+            ];
+        }
+
+        // --- 2. GLOBAL STATE ---
+        let currentTab = 1;
+        let t = 0; 
+        
+        let state = {
+            color: '#03dac6', 
+            components: [
+                { id: 1, type: 'Linear', angle: 45, pos: 8 },
+                { id: 2, type: 'HWP', angle: 0, pos: 18 }
+            ],
+            Ein: [new C(1), new C(0)],
+            Eout: [new C(0), new C(0)],
+            Eout_propagated: [new C(0), new C(0)],
+            sysJ: [[new C(1), new C(0)], [new C(0), new C(1)]],
+            isUOut: false,
+            waveSegments: [],
+            reflSegments: []
+        };
+
+        // Stokes polarimeter state & setup
+        let stokesChal = {
+            S: [1.0, 0, 0, 0],
+            DOP: 0,
+            polType: "Unpolarized",
+            polState: "N/A"
+        };
+
+        let polBenchState = {
+            color: '#03dac6',
+            components: [
+                { id: 991, type: 'QWP', angle: 0, pos: 10 },
+                { id: 992, type: 'Linear', angle: 0, pos: 20 }
+            ],
+            waveSegments: [
+                { startX: 1.5, endX: 10, E: [new C(1), new C(1)], isUnpol: false }, 
+                { startX: 10, endX: 20, E: [new C(1), new C(1)], isUnpol: false },
+                { startX: 20, endX: 28.5, E: [new C(1), new C(1)], isUnpol: false }
+            ],
+            reflSegments: [],
+            isUOut: false
+        };
+
+        // --- 3. UI MANAGEMENT ---
+        function addNewComponent() {
+            let type = document.getElementById('new-comp-type').value;
+            let pos = state.components.length > 0 ? Math.min(26, Math.max(...state.components.map(c => c.pos)) + 4) : 8;
+            state.components.push({ id: Date.now(), type: type, angle: 0, pos: pos });
+            buildComponentUI();
+            updateExploration(true, true); 
+        }
+
+        function removeComponent(id) {
+            state.components = state.components.filter(c => c.id !== id);
+            buildComponentUI();
+            updateExploration(true, true);
+        }
+
+        function updateComp(id, key, value) {
+            let comp = state.components.find(c => c.id === id);
+            if(comp) comp[key] = parseFloat(value);
+            if(key === 'angle') document.getElementById(`val-${id}`).innerText = value + "°";
+            updateExploration(true, true);
+        }
+
+        function buildComponentUI() {
+            const container = document.getElementById('component-list-container');
+            container.innerHTML = ''; 
+            let sortedComps = [...state.components].sort((a, b) => a.pos - b.pos);
+            if(sortedComps.length === 0) {
+                container.innerHTML = `<div style="text-align:center; padding: 20px; color: #888;">No components on the bench.</div>`;
+                return;
+            }
+
+            sortedComps.forEach((comp, index) => {
+                let hasAngle = !comp.type.includes("CP") && comp.type !== "PBS"; 
+                let angleControl = hasAngle ? `
+                    <label>Fast Axis / Transmission Angle <span class="val-display" id="val-${comp.id}">${comp.angle}°</span></label>
+                    <input type="range" min="0" max="180" value="${comp.angle}" oninput="updateComp(${comp.id}, 'angle', this.value)">
+                ` : `<div style="color:#aaa; font-style:italic; font-size:0.9rem;">Angle fixed for this component.</div>`;
+
+                container.innerHTML += `
+                    <div class="control-group" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 4px; border-left: 4px solid #bb86fc; margin-bottom: 12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <strong style="color:#bb86fc;">${index + 1}. ${comp.type}</strong>
+                            <span style="color:#03dac6; font-weight:bold; font-size:1.1rem;" id="pos-val-${comp.id}">x = ${comp.pos.toFixed(1)} cm</span>
+                        </div>
+                        ${angleControl}
+                        <button onclick="removeComponent(${comp.id})" style="background:transparent; color:#cf6679; border: 1px solid #cf6679; margin-top:10px; width:100%; padding: 4px;">Remove Optic</button>
+                    </div>
+                `;
+            });
+        }
+
+        function getInitialPolarizedVector(type, angle) {
+            const A = 0.7071; 
+            // Treat PBS as a linear polarizer for the forward-transmitted wave
+            if(type === "Linear" || type === "PBS") return [new C(A*Math.cos(angle*Math.PI/180)), new C(A*Math.sin(angle*Math.PI/180))];
+            if(type === "RCP") return [new C(0.5), new C(0, -0.5)];
+            if(type === "LCP") return [new C(0.5), new C(0, 0.5)];
+            if(type === "Elliptical") {
+                const a = angle*Math.PI/180;
+                return [new C(A*Math.cos(a)), new C(A*Math.sin(a)*0.5, A*Math.sin(a)*0.866)];
+            }
+            return [new C(1), new C(0)];
+        }
+
+        let mathJaxTimeout = null;
+
+        function updateExploration(triggerMathJax = true, rebuild3D = true) {
+            state.components.sort((a, b) => a.pos - b.pos);
+
+            let currentE = [new C(1), new C(0)]; 
+            let Ein_recorded = null;
+            let isUnpol = true;
+            let sysJ = [[new C(1), new C(0)], [new C(0), new C(1)]];
+            let segments = [];
+            let reflSegments = [];
+            let lastX = 1.5;
+
+            state.components.forEach((comp, index) => {
+                segments.push({ startX: lastX, endX: comp.pos, E: currentE, isUnpol: isUnpol });
+                let J = getOpticMatrix(comp.type, comp.angle);
+                
+                if (isUnpol) {
+                    // PBS collapses unpolarized light just like a Linear Polarizer for the transmitted branch
+                    if (["Linear", "RCP", "LCP", "Elliptical", "PBS"].includes(comp.type)) {
+                        isUnpol = false;
+                        currentE = getInitialPolarizedVector(comp.type, comp.angle);
+                        Ein_recorded = currentE; 
+                        sysJ = [[new C(1), new C(0)], [new C(0), new C(1)]]; 
+                    }
+                } else {
+                    currentE = dotM(J, currentE);
+                    sysJ = multiplyMatrices(J, sysJ); 
+                }
+
+                if (comp.type === "PBS") {
+                    let E_in_to_pbs = segments[segments.length-1].E;
+                    let isU_in = segments[segments.length-1].isUnpol;
+                    let JR = getOpticMatrix("PBS", comp.angle + 90);
+                    let Erefl;
+                    if(isU_in) {
+                         Erefl = [new C(Math.cos((comp.angle+90)*Math.PI/180)*0.707), new C(Math.sin((comp.angle+90)*Math.PI/180)*0.707)];
+                    } else {
+                         Erefl = dotM(JR, E_in_to_pbs);
+                    }
+                    reflSegments.push({ x: comp.pos, E: Erefl });
+                }
+                lastX = comp.pos;
+            });
+
+            segments.push({ startX: lastX, endX: 28.5, E: currentE, isUnpol: isUnpol });
+            state.Ein = Ein_recorded || [new C(0), new C(0)];
+            state.Eout = currentE;
+            state.isUOut = isUnpol;
+            state.sysJ = sysJ;
+            state.waveSegments = segments;
+            state.reflSegments = reflSegments;
+
+            let totalDistance = state.components.length > 0 ? (28.5 - state.components[0].pos) : 0;
+            let kPhase = totalDistance * 0.05; 
+            let phaseMultiplier = new C(Math.cos(-kPhase), Math.sin(-kPhase)); 
+            
+            state.Eout_propagated = [
+                C.mul(state.Eout[0], phaseMultiplier),
+                C.mul(state.Eout[1], phaseMultiplier)
+            ];
+
+            document.getElementById('unpol-warning').style.display = state.isUOut ? 'block' : 'none';
+            document.getElementById('math-panel').style.display = state.isUOut ? 'none' : 'flex';
+            document.getElementById('3d-graphs-container').style.display = state.isUOut ? 'none' : 'block';
+
+            if (triggerMathJax) {
+                clearTimeout(mathJaxTimeout);
+                mathJaxTimeout = setTimeout(() => {
+                    if (!state.isUOut) { updateMathDisplay(); } 
+                    else { document.getElementById('math-box-1').innerHTML = ''; }
+                    updateIntensityGraph(); 
+                }, 100);
+            }
+
+            if (rebuild3D && bench3D1) {
+                bench3D1.buildHW(state, false);
+                bench3D1.buildWaves(state, false); // Ensures Tab 1 has NO magnetic fields rendering
+            }
+        }
+
+        function updateIntensityGraph() {
+            const div = document.getElementById('plot-intensity');
+            if(!div || div.clientWidth === 0) return; // Prevent collapse if hidden
+            let z_vals = [0], i_vals = [1.0]; 
+
+            state.waveSegments.forEach(seg => {
+                let I = seg.isUnpol ? 1.0 : (seg.E[0].mag2() + seg.E[1].mag2());
+                z_vals.push(seg.startX); i_vals.push(I);
+                z_vals.push(seg.endX);   i_vals.push(I);
+            });
+
+            const trace1 = {
+                x: z_vals, y: i_vals, mode: 'lines',
+                line: { color: '#03dac6', width: 3, shape: 'linear' },
+                name: 'Transmitted Beam', fill: 'tozeroy', fillcolor: 'rgba(3, 218, 198, 0.1)'
+            };
+
+            let data = [trace1];
+
+            if(state.reflSegments && state.reflSegments.length > 0) {
+                let r_z = []; let r_i = [];
+                state.reflSegments.forEach(seg => {
+                    let I = seg.E[0].mag2() + seg.E[1].mag2();
+                    r_z.push(seg.x, seg.x + 3); r_i.push(I, I);
+                    r_z.push(null); r_i.push(null); 
+                });
+                const trace2 = {
+                    x: r_z, y: r_i, mode: 'lines', line: { color: '#cf6679', width: 3, dash: 'dot' }, name: 'Reflected (PBS)'
+                };
+                data.push(trace2);
+            }
+
+            const layout = {
+                margin: { t: 30, b: 40, l: 50, r: 20 }, paper_bgcolor: '#121212', plot_bgcolor: '#121212', font: { color: '#aaa' },
+                xaxis: { title: 'Optical Bench Position (z in cm)', range: [0, 30], gridcolor: '#333' },
+                yaxis: { title: 'Relative Intensity (I)', range: [0, 1.1], gridcolor: '#333' }, legend: { x: 0.8, y: 1.1 }
+            };
+
+            if(!div.data) { Plotly.newPlot(div, data, layout, {displayModeBar: false}); } 
+            else { Plotly.react(div, data, layout); }
+        }
+
+        function updateMathDisplay() {
+            const mBox = document.getElementById('math-box-1');
+            if(state.isUOut) return;
+
+            let mHtml = `<div style="display:flex; justify-content:space-around; width:100%; align-items:center; flex-wrap:wrap; gap:20px;">`;
+            mHtml += `<div><strong>Wave Before Attachments ($\\mathbf{E}_{in}$)</strong><br>\\[ \\mathbf{E}_{in} = \\begin{bmatrix} ${fmtC(state.Ein[0])} \\\\ ${fmtC(state.Ein[1])} \\end{bmatrix} \\]</div>`;
+            mHtml += `<div><strong>System Matrix ($\\mathbf{J}_{sys}$)</strong><br>\\[ \\mathbf{J}_{sys} = \\begin{bmatrix} ${fmtC(state.sysJ[0][0])} & ${fmtC(state.sysJ[0][1])} \\\\ ${fmtC(state.sysJ[1][0])} & ${fmtC(state.sysJ[1][1])} \\end{bmatrix} \\]</div>`;
+            mHtml += `<div><strong style="color:#03dac6;">Wave After Attachments ($\\mathbf{E}_{out}$)</strong><br>\\[ \\mathbf{E}_{out} = \\mathbf{J}_{sys} \\mathbf{E}_{in} = \\begin{bmatrix} ${fmtC(state.Eout[0])} \\\\ ${fmtC(state.Eout[1])} \\end{bmatrix} \\]</div>`;
+            mHtml += `</div>`;
+
+            if(state.reflSegments.length > 0) {
+                document.getElementById('ellipse-box-2').style.display = 'flex';
+                document.getElementById('plot-col-refl').style.display = 'flex';
+            } else {
+                document.getElementById('ellipse-box-2').style.display = 'none';
+                document.getElementById('plot-col-refl').style.display = 'none';
+            }
+            mBox.innerHTML = mHtml;
+            if(window.MathJax && window.MathJax.typesetPromise) MathJax.typesetPromise([mBox]);
+        }
+
+        function drawEMVectors(ctx, startX, endX, phase, Ex_r, Ey_r, col, alpha) {
+            ctx.beginPath(); ctx.strokeStyle = col; ctx.globalAlpha = alpha;
+            for(let x = startX; x < endX; x += 6) {
+                let val = Math.sin(x * 0.05 - phase);
+                ctx.moveTo(x, 90); ctx.lineTo(x, 90 + 15*(Ey_r*val) + 5*(Ex_r*val));
+            }
+            ctx.stroke(); ctx.globalAlpha = 1.0;
+        }
+
+        function drawWave2D(ctx, E, startX, endX, phase, col, isUnpol, isVert=false, constX=590) {
+            if(startX >= endX && !isVert) return;
+            if (isUnpol) {
+                const angs = [0, Math.PI/3, 2*Math.PI/3]; const cols = [col, '#bb86fc', '#cf6679'];
+                angs.forEach((a, i) => {
+                    let p = phase * (1 + i*0.05) + i * 2;
+                    let ex = Math.cos(a), ey = Math.sin(a);
+                    ctx.beginPath(); ctx.strokeStyle = cols[i]; ctx.lineWidth = 1.5;
+                    for(let x=startX; x<endX; x++) {
+                        let y = 90 + 15*(ey*Math.sin(x*0.05-p)) + 5*(ex*Math.sin(x*0.05-p));
+                        if(x===startX) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+                    }
+                    ctx.stroke(); drawEMVectors(ctx, startX, endX, p, ex, ey, cols[i], 0.4);
+                });
+            } else {
+                ctx.beginPath(); ctx.strokeStyle = col; ctx.lineWidth = 2.5;
+                for(let u=startX; u<endX; u++) {
+                    let p = u*0.05 - phase;
+                    let Ey = E[1].r*Math.cos(p) - E[1].i*Math.sin(p);
+                    let Ex = E[0].r*Math.cos(p) - E[0].i*Math.sin(p);
+                    if(isVert) { let cx = constX + 15*Ey + 5*Ex; if(u===startX) ctx.moveTo(cx,u); else ctx.lineTo(cx,u); } 
+                    else { let cy = 90 + 15*Ey + 5*Ex; if(u===startX) ctx.moveTo(u,cy); else ctx.lineTo(u,cy); }
+                }
+                ctx.stroke();
+                ctx.beginPath(); ctx.globalAlpha = 0.5;
+                for(let u=startX; u<endX; u+=6) {
+                    let p = u*0.05 - phase;
+                    let Ey = E[1].r*Math.cos(p) - E[1].i*Math.sin(p);
+                    let Ex = E[0].r*Math.cos(p) - E[0].i*Math.sin(p);
+                    if(isVert) { ctx.moveTo(constX, u); ctx.lineTo(constX + 15*Ey + 5*Ex, u); }
+                    else { ctx.moveTo(u, 90); ctx.lineTo(u, 90 + 15*Ey + 5*Ex); }
+                }
+                ctx.stroke(); ctx.globalAlpha = 1.0;
+            }
+        }
+
+        const px2D = x => 50 + x * (800 / 30); 
+
+        function render2DBench(canvasId, cState, isChallenge=false) {
+            const canvas = document.getElementById(canvasId);
+            if(!canvas || canvas.clientWidth === 0) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.beginPath(); ctx.strokeStyle = '#444'; ctx.setLineDash([5,5]);
+            ctx.moveTo(0,90); ctx.lineTo(900,90); ctx.stroke();
+            
+            cState.components.forEach(comp => {
+                if(comp.type === "PBS") { let px = px2D(comp.pos); ctx.moveTo(px,90); ctx.lineTo(px,260); ctx.stroke(); }
+            });
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = '#111'; ctx.strokeStyle = cState.color; ctx.lineWidth=2;
+            ctx.fillRect(10,50,80,80); ctx.strokeRect(10,50,80,80);
+            ctx.fillStyle = 'white'; ctx.font='bold 12px Arial'; ctx.textAlign='center';
+            ctx.fillText(isChallenge ? "HIDDEN" : "SOURCE", 50,85);
+            
+            ctx.fillStyle = '#222'; ctx.strokeStyle = '#555';
+            ctx.fillRect(810,50,80,80); ctx.strokeRect(810,50,80,80);
+            ctx.fillStyle = 'white'; ctx.fillText("Detector T", 850,95);
+
+            if(cState.waveSegments) {
+                cState.waveSegments.forEach(seg => {
+                    drawWave2D(ctx, seg.E, px2D(seg.startX), px2D(seg.endX), t*0.1, cState.color, seg.isUnpol);
+                });
+            }
+
+            if(cState.reflSegments) {
+                cState.reflSegments.forEach(seg => {
+                    let pX = px2D(seg.x);
+                    drawWave2D(ctx, seg.E, 115, 170, t*0.1, '#cf6679', false, true, pX);
+                    ctx.fillStyle = '#222'; ctx.strokeStyle = '#555';
+                    ctx.fillRect(pX-40,170,80,80); ctx.strokeRect(pX-40,170,80,80);
+                    ctx.fillStyle = '#cf6679'; ctx.fillText("Det. R", pX,215);
+                });
+            }
+
+            function drawMount(x, a, col, label) {
+                if(label==="PBS") {
+                    ctx.fillStyle='#252525'; ctx.strokeStyle='#555';
+                    ctx.fillRect(x-25,65,50,50); ctx.strokeRect(x-25,65,50,50);
+                    ctx.beginPath(); ctx.strokeStyle='#03dac6'; ctx.moveTo(x-25,65); ctx.lineTo(x+25,115); ctx.stroke();
+                    ctx.fillStyle='white'; ctx.fillText("PBS",x,140);
+                    return;
+                }
+                ctx.fillStyle='#252525'; ctx.strokeStyle='#555';
+                ctx.fillRect(x-15,40,30,100); ctx.strokeRect(x-15,40,30,100);
+                ctx.beginPath(); ctx.arc(x,90,20,0,2*Math.PI); ctx.fillStyle='#111'; ctx.fill(); ctx.stroke();
+                ctx.fillStyle='white'; ctx.fillText(label,x,160);
+                if(a !== null && !label.includes("CP")) {
+                    ctx.beginPath(); ctx.strokeStyle=col; ctx.lineWidth=3;
+                    let dx = 16*Math.cos(a*Math.PI/180), dy=16*Math.sin(a*Math.PI/180);
+                    ctx.moveTo(x-dx,90-dy); ctx.lineTo(x+dx,90+dy); ctx.stroke();
+                    ctx.fillStyle=col; ctx.fillText(a+"°",x,25);
+                }
+            }
+
+            cState.components.forEach(comp => {
+                let col = ["Linear", "RCP", "LCP", "Elliptical"].includes(comp.type) ? '#03dac6' : '#bb86fc';
+                drawMount(px2D(comp.pos), comp.type==="PBS"?null:comp.angle, col, isChallenge && comp.type==="Linear" ? "Hidden State" : comp.type);
+            });
+        }
+
+        class Scene3D {
+            constructor(containerId) {
+                const container = document.getElementById(containerId);
+                if(!container) return;
+                
+                let width = container.clientWidth || container.parentElement.clientWidth || 800;
+                let height = container.clientHeight || 500;
+                if(width === 0) width = 800;
+                if(height === 0) height = 350; 
+
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(45, width/height, 0.1, 1000);
+                this.camera.position.set(15, 15, 40);
+                
+                this.renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+                this.renderer.setSize(width, height);
+                container.appendChild(this.renderer.domElement);
+                
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.target.set(15, 0, 0);
+
+                this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+                const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(5,20,10); this.scene.add(dl);
+                
+                const grid = new THREE.GridHelper(60,60,0x333333,0x222222); 
+                grid.position.set(15, -4, 0);
+                this.scene.add(grid);
+
+                this.hw = new THREE.Group(); this.scene.add(this.hw);
+                this.wv = new THREE.Group(); this.scene.add(this.wv);
+                this.waveObjects = [];
+                this.reflObjects = [];
+                this.dragItems = [];
+                
+                window.addEventListener('resize', () => {
+                    let w = container.clientWidth;
+                    let h = container.clientHeight;
+                    if(w === 0 || h === 0) return; 
+                    this.camera.aspect = w/h;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(w, h);
+                });
+            }
+
+            createLabel(text, col='white') {
+                const canvas = document.createElement('canvas'); canvas.width=256; canvas.height=128;
+                const ctx = canvas.getContext('2d'); ctx.font='bold 36px Arial'; ctx.fillStyle=col; ctx.textAlign='center'; ctx.fillText(text, 128, 80);
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(canvas)}));
+                sprite.scale.set(8,4,1); return sprite;
+            }
+
+            buildHW(cState, isChallenge) {
+                if(!this.hw) return;
+                while(this.hw.children.length>0) this.hw.remove(this.hw.children[0]);
+                if(this.dragControls) { this.dragControls.dispose(); }
+                this.dragItems = [];
+                
+                const matB = new THREE.MeshPhongMaterial({color: 0x2d2d2d});
+                const matM = new THREE.MeshPhongMaterial({color: 0x555555});
+
+                const addB = (x,z,txt) => {
+                    const m = new THREE.Mesh(new THREE.BoxGeometry(3,3,3), matB); m.position.set(x,0,z); this.hw.add(m);
+                    m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({color:0x666666})));
+                    const l = this.createLabel(txt); l.position.set(x,3.5,z); this.hw.add(l);
+                };
+
+                addB(0,0,isChallenge ? "Unknown Source" : "Source"); addB(30,0,"Detector");
+                
+                const createDraggableMount = (x, angle, color, txt, isPBS) => {
+                    const visualGroup = new THREE.Group(); 
+                    visualGroup.position.x = x; 
+                    this.hw.add(visualGroup);
+                    
+                    const hitGeo = isPBS ? new THREE.BoxGeometry(4,5,4) : new THREE.CylinderGeometry(2.5,2.5,1.5,16);
+                    const hitbox = new THREE.Mesh(hitGeo, new THREE.MeshBasicMaterial({visible:false}));
+                    if(!isPBS) hitbox.rotation.z = Math.PI/2;
+                    hitbox.position.x = x; 
+                    hitbox.userData = { visual: visualGroup, id: null };
+                    this.hw.add(hitbox); 
+                    this.dragItems.push(hitbox);
+
+                    if(isPBS) {
+                        const pbs = new THREE.Mesh(new THREE.BoxGeometry(3,3,3), new THREE.MeshPhongMaterial({color:0x444444, transparent:true, opacity:0.6})); visualGroup.add(pbs);
+                        const pl = new THREE.Mesh(new THREE.PlaneGeometry(4,3), new THREE.MeshBasicMaterial({color:'#03dac6', side:THREE.DoubleSide, transparent:true, opacity:0.5})); pl.rotation.y=Math.PI/4; visualGroup.add(pl);
+                        const l = this.createLabel(txt, color); l.position.set(0,-3.5,0); visualGroup.add(l);
+                    } else {
+                        const r = new THREE.Mesh(new THREE.TorusGeometry(2,0.4,16,50), matM); r.rotation.y=Math.PI/2; visualGroup.add(r);
+                        if(angle !== null && !txt.includes("CP")) {
+                            const b = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,3.8,8), new THREE.MeshBasicMaterial({color:color}));
+                            b.rotation.x = (90-angle)*Math.PI/180; visualGroup.add(b);
+                        }
+                        const l = this.createLabel(txt,color); l.position.set(0,-3.5,0); visualGroup.add(l);
+                    }
+                    return hitbox;
+                };
+
+                cState.components.forEach(comp => {
+                    let isPBS = comp.type === "PBS";
+                    let col = ["Linear", "RCP", "LCP", "Elliptical"].includes(comp.type) ? '#03dac6' : '#bb86fc';
+                    let angle = isPBS ? null : comp.angle;
+                    
+                    let hitbox = createDraggableMount(comp.pos, angle, col, comp.type, isPBS);
+                    hitbox.userData.id = comp.id;
+
+                    if(isPBS) {
+                        let detRGroup = new THREE.Group(); detRGroup.position.x = comp.pos; this.hw.add(detRGroup);
+                        const m = new THREE.Mesh(new THREE.BoxGeometry(3,3,3), matB); m.position.z=12; detRGroup.add(m);
+                        m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({color:0x666666})));
+                        const l = this.createLabel("Det. R"); l.position.set(0,3.5,12); detRGroup.add(l);
+                        hitbox.userData.detR = detRGroup;
+                    }
+                });
+
+                if(!isChallenge && this.dragItems.length > 0) {
+                    this.dragControls = new THREE.DragControls(this.dragItems, this.camera, this.renderer.domElement);
+                    this.dragControls.addEventListener('dragstart', () => { this.controls.enabled = false; });
+                    this.dragControls.addEventListener('drag', (e) => {
+                        let obj = e.object; obj.position.y = 0; obj.position.z = 0;
+                        let compIndex = cState.components.findIndex(c => c.id === obj.userData.id);
+                        if(compIndex !== -1) {
+                            let comp = cState.components[compIndex];
+                            let minX = compIndex > 0 ? cState.components[compIndex - 1].pos + 2 : 3;
+                            let maxX = compIndex < cState.components.length - 1 ? cState.components[compIndex + 1].pos - 2 : 27;
+                            comp.pos = Math.max(minX, Math.min(obj.position.x, maxX));
+                            
+                            obj.position.x = comp.pos;
+                            obj.userData.visual.position.x = comp.pos;
+                            if(obj.userData.detR) obj.userData.detR.position.x = comp.pos;
+                            
+                            let domLab = document.getElementById(`pos-val-${comp.id}`);
+                            if(domLab) domLab.innerText = `x = ${comp.pos.toFixed(1)} cm`;
+                            
+                            updateExploration(false, false);
+                        }
+                    });
+                    this.dragControls.addEventListener('dragend', () => { 
+                        this.controls.enabled = true; 
+                        if (!state.isUOut) updateMathDisplay(); 
+                        updateIntensityGraph(); 
+                    });
+                }
+            }
+
+            buildWaves(cState, isPolarimeter = false) {
+                if(!this.wv) return;
+                while(this.wv.children.length>0) this.wv.remove(this.wv.children[0]);
+                this.waveObjects = [];
+                this.reflObjects = [];
+
+                const cw = (col, pts, rbs) => {
+                    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts*3),3));
+                    const mat = rbs ? new THREE.LineBasicMaterial({color:col, transparent:true, opacity:0.25}) : new THREE.LineBasicMaterial({color:col, linewidth:2});
+                    const l = rbs ? new THREE.LineSegments(g,mat) : new THREE.Line(g,mat); this.wv.add(l); return {l:l, p:pts};
+                };
+
+                const c = cState.color;
+                
+                cState.waveSegments.forEach((seg, i) => {
+                    let showBField = isPolarimeter && (i === 0); 
+                    
+                    let wObj;
+                    if (seg.isUnpol) {
+                        wObj = { 
+                            w:[cw(c,150),cw('#bb86fc',150),cw('#cf6679',150)], 
+                            r:[cw(c,300,true),cw('#bb86fc',300,true),cw('#cf6679',300,true)] 
+                        };
+                        if (showBField) {
+                            wObj.wb = [cw('#ffb74d',150),cw('#ffb74d',150),cw('#ffb74d',150)];
+                            wObj.rb = [cw('#ffb74d',300,true),cw('#ffb74d',300,true),cw('#ffb74d',300,true)];
+                        }
+                    } else {
+                        wObj = { w:[cw(c,200)], r:[cw(c,400,true)] };
+                        if (showBField) {
+                            wObj.wb = [cw('#ffb74d',200)];
+                            wObj.rb = [cw('#ffb74d',400,true)];
+                        }
+                    }
+                    this.waveObjects.push(wObj);
+                });
+
+                cState.reflSegments.forEach(seg => {
+                    this.reflObjects.push({ 
+                        w:[cw('#cf6679',150)], r:[cw('#cf6679',300,true)] 
+                    }); // Never show B fields for reflected segments
+                });
+            }
+
+            update(cState, t) {
+                if(!this.waveObjects) return;
+                
+                const uL = (obj, s, e, ph, E, isZ, cX=0) => {
+                    if(!obj || !obj.l) return;
+                    if(s>=e && isZ) return;
+                    const pos = obj.l.geometry.attributes.position.array; const d = e-s;
+                    for(let i=0; i<obj.p; i++) {
+                        let pct = i/(obj.p-1); let tm = pct*d*2.0 - ph;
+                        let Ey = 1.5*(E[1].r*Math.cos(tm) - E[1].i*Math.sin(tm)); let Ex = 1.5*(E[0].r*Math.cos(tm) - E[0].i*Math.sin(tm));
+                        if(isZ) { pos[i*3]=s+pct*d; pos[i*3+1]=Ey; pos[i*3+2]=Ex; } else { pos[i*3]=cX+Ex; pos[i*3+1]=Ey; pos[i*3+2]=s+pct*d; }
+                    }
+                    obj.l.geometry.attributes.position.needsUpdate = true;
+                };
+                
+                const uR = (obj, s, e, ph, E, isZ, cX=0) => {
+                    if(!obj || !obj.l) return;
+                    if(s>=e && isZ) return;
+                    const pos = obj.l.geometry.attributes.position.array; const d = e-s; const lns = obj.p/2;
+                    for(let i=0; i<lns; i++) {
+                        let pct = i/(lns-1); let tm = pct*d*2.0 - ph;
+                        let Ey = 1.5*(E[1].r*Math.cos(tm) - E[1].i*Math.sin(tm)); let Ex = 1.5*(E[0].r*Math.cos(tm) - E[0].i*Math.sin(tm));
+                        if(isZ) { pos[i*6]=s+pct*d; pos[i*6+1]=0; pos[i*6+2]=0; pos[i*6+3]=s+pct*d; pos[i*6+4]=Ey; pos[i*6+5]=Ex; }
+                        else { pos[i*6]=cX; pos[i*6+1]=0; pos[i*6+2]=s+pct*d; pos[i*6+3]=cX+Ex; pos[i*6+4]=Ey; pos[i*6+5]=s+pct*d; }
+                    }
+                    obj.l.geometry.attributes.position.needsUpdate = true;
+                };
+
+                const uL_B = (obj, s, e, ph, E, isZ, cX=0) => {
+                    if(!obj || !obj.l) return;
+                    if(s>=e && isZ) return;
+                    const pos = obj.l.geometry.attributes.position.array; const d = e-s;
+                    for(let i=0; i<obj.p; i++) {
+                        let pct = i/(obj.p-1); let tm = pct*d*2.0 - ph;
+                        let Ey = 1.5*(E[1].r*Math.cos(tm) - E[1].i*Math.sin(tm)); let Ex = 1.5*(E[0].r*Math.cos(tm) - E[0].i*Math.sin(tm));
+                        let Bx = -Ey, By = Ex;
+                        if(isZ) { pos[i*3]=s+pct*d; pos[i*3+1]=By; pos[i*3+2]=Bx; } else { pos[i*3]=cX+Bx; pos[i*3+1]=By; pos[i*3+2]=s+pct*d; }
+                    }
+                    obj.l.geometry.attributes.position.needsUpdate = true;
+                };
+                
+                const uR_B = (obj, s, e, ph, E, isZ, cX=0) => {
+                    if(!obj || !obj.l) return;
+                    if(s>=e && isZ) return;
+                    const pos = obj.l.geometry.attributes.position.array; const d = e-s; const lns = obj.p/2;
+                    for(let i=0; i<lns; i++) {
+                        let pct = i/(lns-1); let tm = pct*d*2.0 - ph;
+                        let Ey = 1.5*(E[1].r*Math.cos(tm) - E[1].i*Math.sin(tm)); let Ex = 1.5*(E[0].r*Math.cos(tm) - E[0].i*Math.sin(tm));
+                        let Bx = -Ey, By = Ex;
+                        if(isZ) { pos[i*6]=s+pct*d; pos[i*6+1]=0; pos[i*6+2]=0; pos[i*6+3]=s+pct*d; pos[i*6+4]=By; pos[i*6+5]=Bx; }
+                        else { pos[i*6]=cX; pos[i*6+1]=0; pos[i*6+2]=s+pct*d; pos[i*6+3]=cX+Bx; pos[i*6+4]=By; pos[i*6+5]=s+pct*d; }
+                    }
+                    obj.l.geometry.attributes.position.needsUpdate = true;
+                };
+
+                const uU = (wd, s, e, ph, showB) => {
+                    if(s>=e) return;
+                    const ag = [0, Math.PI/3, 2*Math.PI/3];
+                    for(let j=0; j<3; j++) {
+                        let p = ph*(1+j*0.1)+j*2; let E = [new C(Math.cos(ag[j])), new C(Math.sin(ag[j]))];
+                        uL(wd.w[j],s,e,p,E,true); uR(wd.r[j],s,e,p,E,true);
+                        if(showB && wd.wb && wd.wb[j]) {
+                            uL_B(wd.wb[j],s,e,p,E,true); uR_B(wd.rb[j],s,e,p,E,true);
+                        }
+                    }
+                };
+
+                if(cState.waveSegments && this.waveObjects.length === cState.waveSegments.length) {
+                    cState.waveSegments.forEach((seg, i) => {
+                        let showBField = (this.waveObjects[i].wb !== undefined);
+                        if(seg.isUnpol) {
+                            uU(this.waveObjects[i], seg.startX, seg.endX, t*0.1, showBField); 
+                        } else { 
+                            uL(this.waveObjects[i].w[0],seg.startX,seg.endX,t*0.1,seg.E,true); 
+                            uR(this.waveObjects[i].r[0],seg.startX,seg.endX,t*0.1,seg.E,true); 
+                            if(showBField && this.waveObjects[i].wb && this.waveObjects[i].wb[0]) {
+                                uL_B(this.waveObjects[i].wb[0],seg.startX,seg.endX,t*0.1,seg.E,true);
+                                uR_B(this.waveObjects[i].rb[0],seg.startX,seg.endX,t*0.1,seg.E,true);
+                            }
+                        }
+                    });
+                }
+
+                if(cState.reflSegments && this.reflObjects.length === cState.reflSegments.length) {
+                    cState.reflSegments.forEach((seg, i) => {
+                        uL(this.reflObjects[i].w[0],0,10.5,t*0.1,seg.E,false,seg.x); uR(this.reflObjects[i].r[0],0,10.5,t*0.1,seg.E,false,seg.x);
+                    });
+                }
+
+                this.controls.update(); this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        let bench3D1;
+        let polarimeter3D;
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            bench3D1 = new Scene3D('bench3d');
+            polarimeter3D = new Scene3D('polarimeter3d');
+            
+            let isUnpol = stokesChal.DOP < 0.05;
+            polBenchState.waveSegments[0].isUnpol = isUnpol;
+            polBenchState.waveSegments[1].isUnpol = isUnpol; 
+            polBenchState.waveSegments[2].isUnpol = false; 
+            
+            polarimeter3D.buildHW(polBenchState, true);
+            polarimeter3D.buildWaves(polBenchState, true);
+            
+            buildComponentUI();
+            updateExploration();
+            generateStokesChallenge();
+            mainLoop();
+        });
+
+        function drawEllipse(canvasId, E, color) {
+            const canvas = document.getElementById(canvasId);
+            if(!canvas || canvas.clientWidth === 0) return;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.beginPath(); ctx.strokeStyle='#333'; ctx.moveTo(0,100); ctx.lineTo(200,100); ctx.moveTo(100,0); ctx.lineTo(100,200); ctx.stroke();
+            
+            ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2;
+            for(let p=0; p<=2*Math.PI+0.1; p+=0.05) {
+                let x = 100 + (E[0].r*Math.cos(p) - E[0].i*Math.sin(p))*80;
+                let y = 100 - (E[1].r*Math.cos(p) - E[1].i*Math.sin(p))*80;
+                if(p===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+
+            let phase = t*0.1;
+            let cx = 100 + (E[0].r*Math.cos(phase) - E[0].i*Math.sin(phase))*80;
+            let cy = 100 - (E[1].r*Math.cos(phase) - E[1].i*Math.sin(phase))*80;
+            ctx.beginPath(); ctx.arc(cx,cy,4,0,2*Math.PI); ctx.fillStyle='#fff'; ctx.fill(); ctx.stroke();
+        }
+
+        function updatePlotly(divId, E, color, isU) {
+            const div = document.getElementById(divId);
+            if(!div || div.clientWidth === 0) return; 
+            
+            if(isU) { Plotly.purge(div); return; }
+            const z=[], Ex=[], Ey=[], sx=[], sy=[];
+            for(let i=0; i<100; i++) {
+                let a=i*4*Math.PI/100; z.push(a);
+                let c=Math.cos(a-t*0.1), s=Math.sin(a-t*0.1);
+                Ex.push(E[0].r*c - E[0].i*s); Ey.push(E[1].r*c - E[1].i*s);
+                sy.push(-1.5); sx.push(1.5);
+            }
+            const tr = [
+                {type:'scatter3d',mode:'lines',x:z,y:Ex,z:Ey,line:{color:color,width:5}},
+                {type:'scatter3d',mode:'lines',x:z,y:Ex,z:sy,line:{color:'#03dac6',width:2,dash:'dot'}},
+                {type:'scatter3d',mode:'lines',x:z,y:sx,z:Ey,line:{color:'#cf6679',width:2,dash:'dot'}},
+                {type:'scatter3d',mode:'lines',x:[0,4*Math.PI],y:[0,0],z:[0,0],line:{color:'#fff',width:2}}
+            ];
+            
+            if(!div.data) {
+                const layout = { scene:{ xaxis:{visible:false, range:[0,4*Math.PI]}, yaxis:{range:[-1.5,1.5]}, zaxis:{range:[-1.5,1.5]}, camera:{eye:{x:1.5,y:-1.5,z:1.2}} }, paper_bgcolor:'#121212', plot_bgcolor:'#121212', margin:{l:0,r:0,t:0,b:0}, showlegend:false };
+                Plotly.newPlot(div, tr, layout, {displayModeBar:false});
+            } else {
+                Plotly.react(div, tr, div.layout);
+            }
+        }
+
+        // --- 6. TAB 2: STOKES POLARIMETRY CHALLENGE ---
+        function generateStokesChallenge() {
+            let S0 = 1.0;
+            let isUnpol = Math.random() < 0.25; 
+            let isPart = Math.random() < 0.40;  
+            
+            let S1 = (Math.random() * 2 - 1);
+            let S2 = (Math.random() * 2 - 1);
+            let S3 = (Math.random() * 2 - 1);
+            
+            let norm = Math.sqrt(S1*S1 + S2*S2 + S3*S3);
+            if (norm === 0) { S1=1; norm=1; } 
+            
+            let DOP;
+            let pType = "";
+            let pState = "";
+
+            if (isUnpol) {
+                S1=0; S2=0; S3=0; DOP=0;
+                pType = "Unpolarized";
+                pState = "N/A";
+            } else if (isPart) {
+                DOP = 0.2 + Math.random() * 0.6;
+                S1 = (S1/norm) * DOP;
+                S2 = (S2/norm) * DOP;
+                S3 = (S3/norm) * DOP;
+                pType = "Partially Polarized";
+                pState = "Elliptical";
+            } else {
+                DOP = 1.0;
+                pType = "Fully Polarized";
+                if (Math.random() < 0.6) {
+                    let type = Math.floor(Math.random()*4);
+                    if (type===0) { S1=1; S2=0; S3=0; pState="Linear"; } 
+                    else if (type===1) { S1=0; S2=1; S3=0; pState="Linear"; } 
+                    else if (type===2) { S1=0; S2=0; S3=1; pState="Circular"; } 
+                    else if (type===3) { S1=0; S2=0; S3=-1; pState="Circular"; } 
+                } else {
+                    S1 = (S1/norm); S2 = (S2/norm); S3 = (S3/norm);
+                    pState = "Elliptical";
+                }
+            }
+            
+            stokesChal.S = [S0, S1, S2, S3];
+            stokesChal.DOP = DOP;
+            stokesChal.polType = pType;
+            stokesChal.polState = pState;
+
+            document.getElementById('stokes-display').innerText = `[ ${S0.toFixed(2)},  ${(S1>=0?' ':'') + S1.toFixed(2)},  ${(S2>=0?' ':'') + S2.toFixed(2)},  ${(S3>=0?' ':'') + S3.toFixed(2)} ]`;
+            
+            let resultBox = document.getElementById('stokes-result-box');
+            let sHTML = `
+                <strong style="color: #03dac6;">Exact Analytical Result</strong><br><br>
+                <strong>Degree of Polarization (DOP):</strong><br>
+                \\[ DOP = \\frac{\\sqrt{S_1^2 + S_2^2 + S_3^2}}{S_0} = ${stokesChal.DOP.toFixed(2)} \\]<br>
+                This indicates the light is <strong>${stokesChal.polType}</strong>.
+            `;
+
+            if (stokesChal.DOP > 0.05) {
+                sHTML += `<br><br>The polarized portion maps to <strong>${stokesChal.polState}</strong> polarization.`;
+            }
+
+            resultBox.innerHTML = sHTML;
+            if(window.MathJax && window.MathJax.typesetPromise) MathJax.typesetPromise([resultBox]);
+
+            if (polarimeter3D) {
+                let isUnpolState = (stokesChal.DOP < 0.05);
+                polBenchState.waveSegments[0].isUnpol = isUnpolState;
+                polBenchState.waveSegments[1].isUnpol = isUnpolState;
+                polBenchState.waveSegments[2].isUnpol = false;
+                polarimeter3D.buildWaves(polBenchState, true); 
+            }
+            
+            drawPoincareSphere(stokesChal.S);
+        }
+
+        function drawPoincareSphere(S) {
+            const div = document.getElementById('poincare-container');
+            if(!div || div.clientWidth === 0) return;
+
+            let phi = [], theta = [];
+            for (let i = 0; i <= 20; i++) { phi.push(i * Math.PI / 20); } 
+            for (let j = 0; j <= 40; j++) { theta.push(j * 2 * Math.PI / 40); } 
+            
+            let x = [], y = [], z = [];
+            for (let i = 0; i < phi.length; i++) {
+                let x_row = [], y_row = [], z_row = [];
+                for (let j = 0; j < theta.length; j++) {
+                    x_row.push(Math.sin(phi[i]) * Math.cos(theta[j]));
+                    y_row.push(Math.sin(phi[i]) * Math.sin(theta[j]));
+                    z_row.push(Math.cos(phi[i]));
+                }
+                x.push(x_row); y.push(y_row); z.push(z_row);
+            }
+
+            const sphere = { type: 'surface', x: x, y: y, z: z, opacity: 0.1, colorscale: 'Greys', showscale: false, hoverinfo: 'none' };
+            
+            let DOP = Math.sqrt(S[1]*S[1] + S[2]*S[2] + S[3]*S[3]) / S[0];
+            let px = DOP > 0 ? S[1]/S[0] : 0;
+            let py = DOP > 0 ? S[2]/S[0] : 0;
+            let pz = DOP > 0 ? S[3]/S[0] : 0;
+
+            const point = { type: 'scatter3d', mode: 'markers+lines', x: [0, px], y: [0, py], z: [0, pz], marker: { size: 8, color: '#ff4b4b' }, line: { color: '#ff4b4b', width: 5 }, name: 'Stokes Vector' };
+
+            const xAxis = { type: 'scatter3d', mode: 'lines', x: [-1.2, 1.2], y: [0,0], z: [0,0], line: {color: '#888', width: 2}, name: 'S1 (Linear 0/90)' };
+            const yAxis = { type: 'scatter3d', mode: 'lines', x: [0,0], y: [-1.2, 1.2], z: [0,0], line: {color: '#888', width: 2}, name: 'S2 (Linear ±45)' };
+            const zAxis = { type: 'scatter3d', mode: 'lines', x: [0,0], y: [0,0], z: [-1.2, 1.2], line: {color: '#888', width: 2}, name: 'S3 (Circular)' };
+
+            const layout = {
+                margin: { t: 40, b: 0, l: 0, r: 0 }, paper_bgcolor: '#121212', plot_bgcolor: '#121212',
+                scene: {
+                    xaxis: { title: 'S1 (Horizontal/Vertical)', range: [-1.5, 1.5], backgroundcolor: '#121212', gridcolor: '#333' },
+                    yaxis: { title: 'S2 (Diagonal)', range: [-1.5, 1.5], backgroundcolor: '#121212', gridcolor: '#333' },
+                    zaxis: { title: 'S3 (Circular)', range: [-1.5, 1.5], backgroundcolor: '#121212', gridcolor: '#333' },
+                    camera: { eye: {x: 1.5, y: 1.5, z: 1.0} }
+                }, showlegend: false
+            };
+
+            Plotly.react(div, [sphere, xAxis, yAxis, zAxis, point], layout);
+        }
+
+        function animatePolarimeter() {
+            if(!polarimeter3D) return;
+
+            let qwpAngle = t % 360;
+            polBenchState.components[0].angle = qwpAngle;
+            
+            polarimeter3D.dragItems.forEach(hitbox => {
+                if(hitbox.userData.id === 991) {
+                    let vis = hitbox.userData.visual;
+                    if(vis.children.length > 1 && vis.children[1].geometry && vis.children[1].geometry.type === 'CylinderGeometry') {
+                        vis.children[1].rotation.x = (90 - qwpAngle) * Math.PI / 180;
+                    }
+                }
+            });
+
+            let isUnpol = stokesChal.DOP < 0.05;
+            let initialE;
+            
+            if (!isUnpol) {
+                let S1 = stokesChal.S[1] / stokesChal.DOP;
+                let S2 = stokesChal.S[2] / stokesChal.DOP;
+                let S3 = stokesChal.S[3] / stokesChal.DOP;
+                
+                let Ip = Math.sqrt(S1*S1 + S2*S2 + S3*S3);
+                if(Ip === 0) { S1 = 1; Ip = 1; }
+                
+                let Ex = Math.sqrt((Ip + S1) / 2);
+                let Ey_mag = Math.sqrt((Ip - S1) / 2);
+                let delta = Math.atan2(S3, S2);
+                
+                initialE = [new C(Ex, 0), new C(Ey_mag * Math.cos(delta), Ey_mag * Math.sin(delta))];
+            } else {
+                initialE = [new C(1), new C(0)]; 
+            }
+            
+            polBenchState.waveSegments[0].E = initialE;
+            polBenchState.waveSegments[0].isUnpol = isUnpol;
+
+            let J_qwp = getOpticMatrix("QWP", qwpAngle);
+            let J_lin = getOpticMatrix("Linear", 0);
+            
+            if(isUnpol) {
+                polBenchState.waveSegments[1].isUnpol = true;
+                polBenchState.waveSegments[1].E = initialE;
+                polBenchState.waveSegments[2].isUnpol = false;
+                polBenchState.waveSegments[2].E = [new C(0.707), new C(0)]; 
+            } else {
+                let E2 = dotM(J_qwp, initialE);
+                polBenchState.waveSegments[1].isUnpol = false;
+                polBenchState.waveSegments[1].E = E2;
+                
+                let E3 = dotM(J_lin, E2);
+                polBenchState.waveSegments[2].isUnpol = false;
+                polBenchState.waveSegments[2].E = E3;
+            }
+            
+            polarimeter3D.update(polBenchState, t);
+
+            const divInt = document.getElementById('polarimeter-intensity');
+            if(divInt && divInt.clientWidth > 0) {
+                let S = stokesChal.S;
+                let curve_x = [];
+                let curve_y = [];
+                
+                for(let ang = 0; ang <= 360; ang += 3) {
+                    let rad = ang * Math.PI / 180;
+                    let I = 0.5 * (S[0] + S[1]*Math.pow(Math.cos(2*rad), 2) + S[2]*Math.sin(2*rad)*Math.cos(2*rad) - S[3]*Math.sin(2*rad));
+                    curve_x.push(ang);
+                    curve_y.push(I);
+                }
+                
+                let currentRad = qwpAngle * Math.PI / 180;
+                let currentI = 0.5 * (S[0] + S[1]*Math.pow(Math.cos(2*currentRad), 2) + S[2]*Math.sin(2*currentRad)*Math.cos(2*currentRad) - S[3]*Math.sin(2*currentRad));
+
+                const traceLine = { x: curve_x, y: curve_y, mode: 'lines', line: {color: '#ffb74d', width: 2}, name: 'Intensity Curve', hoverinfo: 'none' };
+                const traceDot = { x: [qwpAngle], y: [currentI], mode: 'markers', marker: {color: '#03dac6', size: 12, line: {color: '#fff', width: 2}}, name: 'Detected Intensity' };
+                
+                const layoutInt = {
+                    margin: { t: 10, b: 30, l: 40, r: 20 }, paper_bgcolor: '#121212', plot_bgcolor: '#121212',
+                    xaxis: { title: 'QWP Angle (degrees)', range: [0, 360], gridcolor: '#333', tickcolor: '#aaa', font: {color: '#aaa'}, tickvals: [0, 90, 180, 270, 360] },
+                    yaxis: { title: 'Intensity', range: [0, S[0]], gridcolor: '#333', tickcolor: '#aaa', font: {color: '#aaa'} },
+                    showlegend: false
+                };
+                
+                Plotly.react(divInt, [traceLine, traceDot], layoutInt, {displayModeBar: false});
+            }
+        }
+
+        function mainLoop() {
+            requestAnimationFrame(mainLoop);
+            t++;
+            
+            if(currentTab === 1) {
+                render2DBench('bench2d', state);
+                if(bench3D1) bench3D1.update(state, t);
+                if(!state.isUOut) {
+                    drawEllipse('ellipse1', state.Eout, state.color);
+                    if(state.reflSegments.length > 0) drawEllipse('ellipse2', state.reflSegments[0].E, '#cf6679');
+                    
+                    if(t % 3 === 0) {
+                        updatePlotly('plot-in', state.Ein, state.color, false);
+                        updatePlotly('plot-out', state.Eout, state.color, false);
+                        if(state.reflSegments.length > 0) updatePlotly('plot-refl', state.reflSegments[0].E, '#cf6679', false);
+                    }
+                }
+            } else if (currentTab === 2) {
+                animatePolarimeter();
+            }
+        }
+
+        function switchTab(tId) {
+            currentTab = tId;
+            document.querySelectorAll('.tab').forEach((el,i) => el.className = `tab ${i+1===tId?'active':''}`);
+            document.getElementById('tab1').className = `tab-content ${tId===1?'active':''}`;
+            document.getElementById('tab2').className = `tab-content ${tId===2?'active':''}`;
+            
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+                if(tId === 2) {
+                    drawPoincareSphere(stokesChal.S);
+                } else {
+                    updateIntensityGraph(); 
+                }
+            }, 50);
+        }
+    </script>
+</body>
+</html>
